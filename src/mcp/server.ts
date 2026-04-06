@@ -34,7 +34,11 @@ export class McpServer {
 			console.debug(`[MCP] Total connected clients: ${this.connectedClients.size}`);
 
 			sock.on("message", (data) => {
-				this.handleMessage(sock, data.toString());
+				// Ensure proper UTF-8 decoding for multi-byte characters
+				const message = Buffer.isBuffer(data)
+					? data.toString("utf8")
+					: data.toString();
+				this.handleMessage(sock, message);
 			});
 
 			sock.on("close", () => {

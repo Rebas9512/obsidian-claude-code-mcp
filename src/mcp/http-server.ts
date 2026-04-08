@@ -1,5 +1,6 @@
 import * as http from "http";
 import * as crypto from "crypto";
+
 import { McpRequest, McpResponse, McpNotification } from "./types";
 
 interface HttpReplyFunction {
@@ -202,7 +203,7 @@ export class McpHttpServer {
 
 		// Set SSE headers
 		res.writeHead(200, {
-			"Content-Type": "text/event-stream",
+			"Content-Type": "text/event-stream; charset=utf-8",
 			"Cache-Control": "no-cache",
 			Connection: "keep-alive",
 			"Access-Control-Allow-Origin": "*",
@@ -358,12 +359,21 @@ export class McpHttpServer {
 
 	private async readRequestBody(req: http.IncomingMessage): Promise<string> {
 		return new Promise((resolve, reject) => {
-			let body = "";
-			req.on("data", (chunk) => {
-				body += chunk.toString();
+			const chunks: Buffer[] = [];
+			req.on("data", (chunk: Buffer | string) => {
+				// In Electron/Obsidian, chunks may arrive as pre-decoded strings
+				// instead of raw Buffers, which corrupts multi-byte UTF-8 chars
+				// at chunk boundaries. Always ensure we work with raw Buffers.
+				if (Buffer.isBuffer(chunk)) {
+					chunks.push(chunk);
+				} else {
+					chunks.push(Buffer.from(chunk, "binary"));
+				}
 			});
 			req.on("end", () => {
-				resolve(body);
+				// Decode the complete buffer as UTF-8 in one pass,
+				// so no multi-byte character can be split across chunks.
+				resolve(Buffer.concat(chunks).toString("utf8"));
 			});
 			req.on("error", reject);
 		});
